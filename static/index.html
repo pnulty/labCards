@@ -6,29 +6,34 @@
 	<title>Codex Cards</title>
 	<style>
 		:root {
-			--bg: #0f172a;
-			--panel: #111827;
-			--text: #e5e7eb;
-			--muted: #9ca3af;
-			--accent: #38bdf8;
-			--accent2: #f97316;
+			--bg: #ffffff;
+			--panel: #ffffff;
+			--text: #111111;
+			--muted: #6b7280;
+			--line: #d1d5db;
+			--accent: #0f766e; /* subdued teal */
+			--accent2: #b45309; /* muted orange */
 		}
-		body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
-		.container { max-width: 960px; margin: 0 auto; padding: 24px; }
-		h1 { font-size: 24px; margin: 0 0 12px; }
-		.controls { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
-		button { background: var(--accent); color: #03131a; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
-		button.secondary { background: var(--accent2); color: #1a1003; }
+		/* Tufte-inspired typography */
+		body { margin: 0; font-family: "Georgia", "Times New Roman", Times, serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+		.container { max-width: 1600px; margin: 0 auto; padding: 32px 40px; }
+		h1 { font-weight: 400; letter-spacing: 0.2px; margin: 0 0 16px; font-size: 24px; }
+		.controls { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+		button { background: transparent; color: var(--text); border: 1px solid #bfbfbf; padding: 8px 12px; border-radius: 3px; cursor: pointer; font-weight: 400; font-family: inherit; }
+		button.secondary { border-color: #c8c8c8; color: var(--text); }
+		button:hover { background: #f9fafb; }
 		button:disabled { opacity: 0.5; cursor: not-allowed; }
 		.status { color: var(--muted); font-size: 14px; margin-left: 8px; }
-		.redraws { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-		.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-		.card { background: var(--panel); border-radius: 10px; padding: 12px; border: 1px solid #1f2937; }
-		.card h3 { margin: 0 0 6px; font-size: 16px; }
-		.card .category { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-		.card .text { white-space: pre-wrap; line-height: 1.3; }
-		.footer { margin-top: 16px; color: var(--muted); font-size: 12px; display: flex; gap: 12px; align-items: center; }
+		.cardsWrap { overflow-x: auto; }
+		.cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; min-width: 1400px; }
+		.card { background: var(--panel); border-radius: 2px; padding: 14px 16px; border: 1px solid var(--line); display: flex; flex-direction: column; }
+		.card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 400; }
+		.card .category { color: var(--muted); font-size: 12px; margin-bottom: 10px; letter-spacing: 0.4px; text-transform: uppercase; }
+		.card .text { white-space: pre-wrap; line-height: 1.5; flex: 1 1 auto; font-size: 15px; }
+		.card .actions { margin-top: 12px; }
+		.footer { margin-top: 18px; color: var(--muted); font-size: 12px; display: flex; gap: 12px; align-items: center; border-top: 1px solid var(--line); padding-top: 8px; }
 		.footer a { color: var(--accent); text-decoration: none; }
+		.footer a:hover { text-decoration: underline; }
 	</style>
 </head>
 <body>
@@ -39,12 +44,9 @@
 			<button id="resetBtn" disabled>Reset deck</button>
 			<div class="status" id="status">Connecting…</div>
 		</div>
-		<div class="redraws">
-			<button id="rdWorkshop" class="secondary" disabled>Redraw Workshop</button>
-			<button id="rdTool" class="secondary" disabled>Redraw Tool</button>
-			<button id="rdProtocol" class="secondary" disabled>Redraw Protocol</button>
+		<div class="cardsWrap">
+			<div class="cards" id="cards"></div>
 		</div>
-		<div class="cards" id="cards"></div>
 		<div class="footer">
 			<span>All players see the same draws in real time.</span>
 			<a href="/instructions">Download instructions (.docx)</a>
@@ -57,9 +59,6 @@
 		const resetBtn = document.getElementById('resetBtn');
 		const statusEl = document.getElementById('status');
 		const cardsEl = document.getElementById('cards');
-		const rdWorkshop = document.getElementById('rdWorkshop');
-		const rdTool = document.getElementById('rdTool');
-		const rdProtocol = document.getElementById('rdProtocol');
 
 		function escapeHtml(str) {
 			return (str || '').replace(/[&<>\"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s]));
@@ -71,29 +70,46 @@
 			statusEl.textContent = connected ? 'Connected' : 'Disconnected';
 		}
 
+		function getSuit(card) {
+			const c1 = (card.Category1 || '').toUpperCase();
+			const c2 = (card.Category2 || '').toUpperCase();
+			const suits = ['TOUCHSTONE','WORKSHOP','TOOL','PROTOCOL','PLATFORM'];
+			if (suits.includes(c1)) return c1;
+			if (suits.includes(c2)) return c2;
+			return '';
+		}
+
 		function render(state) {
 			statusEl.textContent = `${state.drawn.length} drawn / ${state.total} total / ${state.remaining} remaining`;
 			drawBtn.disabled = state.remaining <= 0;
 			cardsEl.innerHTML = '';
+			const can = state.canRedraw || {};
 			for (const card of state.drawn) {
 				const el = document.createElement('div');
 				el.className = 'card';
 				const name = card.Name || 'Card';
 				const c1 = card.Category1 || '';
 				const c2 = card.Category2 || '';
+				const suit = getSuit(card);
 				const text = (card.Text || card.ShortText || '').replaceAll('\u2022', '•');
 				el.innerHTML = `
 					<div class="category">${escapeHtml(c1)}${c1 && c2 ? ' · ' : ''}${escapeHtml(c2)}</div>
 					<h3>${escapeHtml(name)}</h3>
 					<div class="text">${escapeHtml(text)}</div>
 				`;
+				if (suit && (suit === 'WORKSHOP' || suit === 'TOOL' || suit === 'PROTOCOL')) {
+					const actions = document.createElement('div');
+					actions.className = 'actions';
+					const btn = document.createElement('button');
+					btn.className = 'secondary';
+					btn.textContent = `Redraw ${suit.charAt(0)}${suit.slice(1).toLowerCase()}`;
+					btn.disabled = !can[suit];
+					btn.addEventListener('click', () => socket.emit('redraw', { suit }));
+					actions.appendChild(btn);
+					el.appendChild(actions);
+				}
 				cardsEl.appendChild(el);
 			}
-			// enable/disable redraws
-			const cr = (state.canRedraw || {});
-			rdWorkshop.disabled = !cr.WORKSHOP;
-			rdTool.disabled = !cr.TOOL;
-			rdProtocol.disabled = !cr.PROTOCOL;
 		}
 
 		const socket = io({ transports: ['websocket', 'polling'] });
@@ -104,9 +120,6 @@
 
 		drawBtn.addEventListener('click', () => socket.emit('draw'));
 		resetBtn.addEventListener('click', () => socket.emit('reset'));
-		rdWorkshop.addEventListener('click', () => socket.emit('redraw', { suit: 'WORKSHOP' }));
-		rdTool.addEventListener('click', () => socket.emit('redraw', { suit: 'TOOL' }));
-		rdProtocol.addEventListener('click', () => socket.emit('redraw', { suit: 'PROTOCOL' }));
 	</script>
 </body>
 </html>
