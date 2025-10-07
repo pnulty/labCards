@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Codex Cards</title>
+	<style>
+		:root {
+			--bg: #0f172a;
+			--panel: #111827;
+			--text: #e5e7eb;
+			--muted: #9ca3af;
+			--accent: #38bdf8;
+		}
+		body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
+		.container { max-width: 960px; margin: 0 auto; padding: 24px; }
+		h1 { font-size: 24px; margin: 0 0 12px; }
+		.controls { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+		button { background: var(--accent); color: #03131a; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+		button:disabled { opacity: 0.5; cursor: not-allowed; }
+		.status { color: var(--muted); font-size: 14px; margin-left: 8px; }
+		.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+		.card { background: var(--panel); border-radius: 10px; padding: 12px; border: 1px solid #1f2937; }
+		.card h3 { margin: 0 0 6px; font-size: 16px; }
+		.card .category { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+		.card .text { white-space: pre-wrap; line-height: 1.3; }
+		.footer { margin-top: 16px; color: var(--muted); font-size: 12px; display: flex; gap: 12px; align-items: center; }
+		.footer a { color: var(--accent); text-decoration: none; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>Codex Cards</h1>
+		<div class="controls">
+			<button id="drawBtn" disabled>Draw card</button>
+			<button id="resetBtn" disabled>Reset deck</button>
+			<div class="status" id="status">Connecting…</div>
+		</div>
+		<div class="cards" id="cards"></div>
+		<div class="footer">
+			<span>All players see the same draws in real time.</span>
+			<a href="/instructions">Download instructions (.docx)</a>
+		</div>
+	</div>
+
+	<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+	<script>
+		const drawBtn = document.getElementById('drawBtn');
+		const resetBtn = document.getElementById('resetBtn');
+		const statusEl = document.getElementById('status');
+		const cardsEl = document.getElementById('cards');
+
+		function escapeHtml(str) {
+			return (str || '').replace(/[&<>\"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s]));
+		}
+
+		function setConnected(connected) {
+			drawBtn.disabled = !connected;
+			resetBtn.disabled = !connected;
+			statusEl.textContent = connected ? 'Connected' : 'Disconnected';
+		}
+
+		function render(state) {
+			statusEl.textContent = `${state.drawn.length} drawn / ${state.total} total / ${state.remaining} remaining`;
+			drawBtn.disabled = state.remaining <= 0;
+			cardsEl.innerHTML = '';
+			for (const card of state.drawn) {
+				const el = document.createElement('div');
+				el.className = 'card';
+				const name = card.Name || 'Card';
+				const c1 = card.Category1 || '';
+				const c2 = card.Category2 || '';
+				const text = (card.Text || card.ShortText || '').replaceAll('\u2022', '•');
+				el.innerHTML = `
+					<div class="category">${escapeHtml(c1)}${c1 && c2 ? ' · ' : ''}${escapeHtml(c2)}</div>
+					<h3>${escapeHtml(name)}</h3>
+					<div class="text">${escapeHtml(text)}</div>
+				`;
+				cardsEl.appendChild(el);
+			}
+		}
+
+		if (!window.io) {
+			statusEl.textContent = 'Socket library failed to load';
+			console.error('Socket.IO client not found');
+		} else {
+			const socket = io({ transports: ['websocket', 'polling'] });
+			socket.on('connect', () => { console.log('connected'); setConnected(true); });
+			socket.on('disconnect', () => { console.log('disconnected'); setConnected(false); });
+			socket.on('connect_error', (err) => { console.error('connect_error', err); statusEl.textContent = 'Connection error'; });
+			socket.on('state', (state) => { render(state); });
+			drawBtn.addEventListener('click', () => socket.emit('draw'));
+			resetBtn.addEventListener('click', () => socket.emit('reset'));
+		}
+	</script>
+</body>
+</html>
