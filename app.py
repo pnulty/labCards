@@ -32,6 +32,7 @@ suit_to_indexes: Dict[str, List[int]] = {}
 drawn_indexes: List[int] = []
 # Pointer to next suit position in SUIT_ORDER
 current_step: int = 0
+_initialized: bool = False
 
 
 def load_cards_from_tsv(tsv_path: str) -> List[Dict[str, Any]]:
@@ -101,28 +102,54 @@ def current_state() -> Dict[str, Any]:
 	}
 
 
+def bootstrap() -> None:
+	global all_cards, _initialized
+	all_cards = load_cards()
+	build_suits()
+	_initialized = True
+	print(f"Materials dir: {MATERIALS_DIR}")
+	print(f"Loaded cards: {len(all_cards)}")
+	for suit in SUIT_ORDER:
+		print(f"{suit}: {len(suit_to_indexes.get(suit, []))} available")
+
+
+def ensure_bootstrap() -> None:
+	if not _initialized or not all_cards:
+		bootstrap()
+
+
+@app.before_first_request
+def _init_before_first_request():
+	ensure_bootstrap()
+
+
 @app.route('/')
 def index():
+	ensure_bootstrap()
 	return send_from_directory(app.static_folder, 'index.html')
 
 
 @app.route('/instructions')
 def instructions():
+	ensure_bootstrap()
 	return send_from_directory(MATERIALS_DIR, 'instructions.docx', as_attachment=True)
 
 
 @app.route('/healthz')
 def healthz():
+	ensure_bootstrap()
 	return jsonify({'ok': True, 'drawn': len(drawn_indexes)})
 
 
 @socketio.on('connect')
 def on_connect():
+	ensure_bootstrap()
 	emit('state', current_state())
 
 
 @socketio.on('draw')
 def on_draw():
+	ensure_bootstrap()
 	global current_step
 	# Advance to the next suit that still has available cards
 	while current_step < len(SUIT_ORDER) and not suit_to_indexes.get(SUIT_ORDER[current_step]):
@@ -146,19 +173,9 @@ def on_draw():
 
 @socketio.on('reset')
 def on_reset():
+	ensure_bootstrap()
 	build_suits()
 	socketio.emit('state', current_state())
-
-
-def bootstrap():
-	global all_cards
-	all_cards = load_cards()
-	build_suits()
-	# Simple startup logging to help verify data loading
-	print(f"Materials dir: {MATERIALS_DIR}")
-	print(f"Loaded cards: {len(all_cards)}")
-	for suit in SUIT_ORDER:
-		print(f"{suit}: {len(suit_to_indexes.get(suit, []))} available")
 
 
 if __name__ == '__main__':
