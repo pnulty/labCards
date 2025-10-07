@@ -191,6 +191,11 @@ def instructions():
 	return send_from_directory(MATERIALS_DIR, 'instructions.docx', as_attachment=True)
 
 
+@app.route('/cards')
+def cards_download():
+	return send_from_directory(MATERIALS_DIR, 'cards.json', as_attachment=True)
+
+
 @app.route('/healthz')
 def healthz():
 	return jsonify({'ok': True, 'drawn': len(drawn_indexes)})
