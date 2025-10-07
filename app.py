@@ -21,6 +21,7 @@ MATERIALS_DIR = os.path.join(BASE_DIR, 'materials')
 
 CARDS_TSV_PATH = os.path.join(MATERIALS_DIR, 'cards.tsv')
 CARDS_JSON_PATH = os.path.join(MATERIALS_DIR, 'cards.json')
+SESSION_PATH = os.path.join(MATERIALS_DIR, 'session.json')
 
 # In-memory game state (single shared room/game)
 all_cards: List[Dict[str, Any]] = []
@@ -118,10 +119,51 @@ def current_state() -> Dict[str, Any]:
 	}
 
 
+def save_session() -> None:
+	try:
+		os.makedirs(MATERIALS_DIR, exist_ok=True)
+		with open(SESSION_PATH, 'w', encoding='utf-8') as f:
+			json.dump({
+				'drawn_indexes': drawn_indexes,
+				'suit_to_indexes': suit_to_indexes,
+				'suit_drawn_pos': suit_drawn_pos,
+				'redraw_used': redraw_used,
+				'current_step': current_step,
+				'cards_len': len(all_cards),
+			}, f, ensure_ascii=False)
+	except Exception:
+		pass
+
+
+def try_load_session() -> bool:
+	global drawn_indexes, suit_to_indexes, suit_drawn_pos, redraw_used, current_step
+	if not os.path.exists(SESSION_PATH):
+		return False
+	try:
+		with open(SESSION_PATH, 'r', encoding='utf-8') as f:
+			data = json.load(f)
+			if data.get('cards_len') != len(all_cards):
+				return False
+			drawn_indexes = [int(i) for i in data.get('drawn_indexes', [])]
+			# Validate indexes
+			for i in drawn_indexes:
+				if i < 0 or i >= len(all_cards):
+					return False
+			suit_to_indexes = {k: [int(i) for i in v] for k, v in (data.get('suit_to_indexes') or {}).items() if k in SUIT_SET}
+			suit_drawn_pos = {k: int(v) for k, v in (data.get('suit_drawn_pos') or {}).items() if k in SUIT_SET}
+			redraw_used = {k: bool(v) for k, v in (data.get('redraw_used') or {}).items() if k in ELIGIBLE_REDRAW}
+			current_step = int(data.get('current_step') or 0)
+			return True
+	except Exception:
+		return False
+
+
 def bootstrap() -> None:
 	global all_cards, _initialized
 	all_cards = load_cards()
-	build_suits()
+	# Attempt to restore previous session; if invalid or absent, rebuild fresh
+	if not try_load_session():
+		build_suits()
 	_initialized = True
 	print(f"Materials dir: {MATERIALS_DIR}")
 	print(f"Loaded cards: {len(all_cards)}")
@@ -183,6 +225,7 @@ def on_draw():
 		current_step += 1
 	# Broadcast updated state
 	socketio.emit('state', current_state())
+	save_session()
 
 
 @socketio.on('redraw')
@@ -206,6 +249,7 @@ def on_redraw(payload):
 	drawn_indexes[pos] = new_idx
 	redraw_used[suit] = True
 	socketio.emit('state', current_state())
+	save_session()
 
 
 @socketio.on('reset')
@@ -213,6 +257,7 @@ def on_reset():
 	ensure_bootstrap()
 	build_suits()
 	socketio.emit('state', current_state())
+	save_session()
 
 
 if __name__ == '__main__':
