@@ -118,26 +118,23 @@ def ensure_bootstrap() -> None:
 		bootstrap()
 
 
-@app.before_first_request
-def _init_before_first_request():
+@app.before_request
+def _ensure_on_each_request():
 	ensure_bootstrap()
 
 
 @app.route('/')
 def index():
-	ensure_bootstrap()
 	return send_from_directory(app.static_folder, 'index.html')
 
 
 @app.route('/instructions')
 def instructions():
-	ensure_bootstrap()
 	return send_from_directory(MATERIALS_DIR, 'instructions.docx', as_attachment=True)
 
 
 @app.route('/healthz')
 def healthz():
-	ensure_bootstrap()
 	return jsonify({'ok': True, 'drawn': len(drawn_indexes)})
 
 
