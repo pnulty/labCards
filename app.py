@@ -14,14 +14,18 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 
 # Data paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CARDS_TSV_PATH = os.path.join(BASE_DIR, 'materials', 'cards.tsv')
-CARDS_JSON_PATH = os.path.join(BASE_DIR, 'materials', 'cards.json')
+
+# Materials directory (everything lives under labcards/)
 MATERIALS_DIR = os.path.join(BASE_DIR, 'materials')
+
+CARDS_TSV_PATH = os.path.join(MATERIALS_DIR, 'cards.tsv')
+CARDS_JSON_PATH = os.path.join(MATERIALS_DIR, 'cards.json')
 
 # In-memory game state (single shared room/game)
 all_cards: List[Dict[str, Any]] = []
 # Suit-based structures
 SUIT_ORDER = ["TOUCHSTONE", "WORKSHOP", "TOOL", "PROTOCOL", "PLATFORM"]
+SUIT_SET = set(SUIT_ORDER)
 suit_to_indexes: Dict[str, List[int]] = {}
 # Drawn sequence (indexes of all_cards)
 drawn_indexes: List[int] = []
@@ -31,6 +35,8 @@ current_step: int = 0
 
 def load_cards_from_tsv(tsv_path: str) -> List[Dict[str, Any]]:
 	cards: List[Dict[str, Any]] = []
+	if not os.path.exists(tsv_path):
+		return cards
 	with open(tsv_path, newline='', encoding='utf-8') as f:
 		reader = csv.DictReader(f, delimiter='\t')
 		for row in reader:
@@ -50,9 +56,7 @@ def load_cards() -> List[Dict[str, Any]]:
 	if os.path.exists(CARDS_JSON_PATH):
 		with open(CARDS_JSON_PATH, 'r', encoding='utf-8') as f:
 			data = json.load(f)
-			if not isinstance(data, list):
-				raise RuntimeError('cards.json must contain a list of cards')
-			return data
+			return data if isinstance(data, list) else []
 	return load_cards_from_tsv(CARDS_TSV_PATH)
 
 
@@ -61,9 +65,11 @@ def build_suits() -> None:
 	global suit_to_indexes, drawn_indexes, current_step
 	suit_to_indexes = {suit: [] for suit in SUIT_ORDER}
 	for idx, card in enumerate(all_cards):
-		suit = (card.get('Category1') or '').strip().upper()
-		if suit in suit_to_indexes:
-			suit_to_indexes[suit].append(idx)
+		c1 = (card.get('Category1') or '').strip().upper()
+		c2 = (card.get('Category2') or '').strip().upper()
+		use = c1 if c1 in SUIT_SET else (c2 if c2 in SUIT_SET else '')
+		if use:
+			suit_to_indexes[use].append(idx)
 	# Shuffle within each suit for randomness
 	for lst in suit_to_indexes.values():
 		random.shuffle(lst)
@@ -147,6 +153,11 @@ def bootstrap():
 	global all_cards
 	all_cards = load_cards()
 	build_suits()
+	# Simple startup logging to help verify data loading
+	print(f"Materials dir: {MATERIALS_DIR}")
+	print(f"Loaded cards: {len(all_cards)}")
+	for suit in SUIT_ORDER:
+		print(f"{suit}: {len(suit_to_indexes.get(suit, []))} available")
 
 
 if __name__ == '__main__':

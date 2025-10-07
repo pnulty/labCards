@@ -43,7 +43,7 @@
 		</div>
 	</div>
 
-	<script src="/socket.io/socket.io.js"></script>
+	<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 	<script>
 		const drawBtn = document.getElementById('drawBtn');
 		const resetBtn = document.getElementById('resetBtn');
@@ -80,18 +80,13 @@
 			}
 		}
 
-		if (!window.io) {
-			statusEl.textContent = 'Socket library failed to load';
-			console.error('Socket.IO client not found');
-		} else {
-			const socket = io({ transports: ['websocket', 'polling'] });
-			socket.on('connect', () => { console.log('connected'); setConnected(true); });
-			socket.on('disconnect', () => { console.log('disconnected'); setConnected(false); });
-			socket.on('connect_error', (err) => { console.error('connect_error', err); statusEl.textContent = 'Connection error'; });
-			socket.on('state', (state) => { render(state); });
-			drawBtn.addEventListener('click', () => socket.emit('draw'));
-			resetBtn.addEventListener('click', () => socket.emit('reset'));
-		}
+		const socket = io({ transports: ['websocket', 'polling'] });
+		socket.on('connect', () => { setConnected(true); });
+		socket.on('disconnect', () => { setConnected(false); });
+		socket.on('connect_error', () => { statusEl.textContent = 'Connection error'; });
+		socket.on('state', (state) => { render(state); });
+		drawBtn.addEventListener('click', () => socket.emit('draw'));
+		resetBtn.addEventListener('click', () => socket.emit('reset'));
 	</script>
 </body>
 </html>

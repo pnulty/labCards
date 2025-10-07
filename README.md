@@ -1,49 +1,36 @@
-# Codex Cards
+# Codex Cards (labcards)
 
-Minimal Flask + Socket.IO app to run a shared card-drawing session for 6–10 players. All clients see the same deck and draws in real time.
+Minimal Flask + Socket.IO app to run a shared card-drawing session.
 
-## Prerequisites
-- Python 3.10+
-- Recommended: virtualenv
-
-## Setup
-
+## Local run
 ```bash
-cd /home/paul/codexCards
+cd /home/paul/codexCards/labcards
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-## Convert cards (one-off)
-We now prefer JSON. Convert your TSV once:
-```bash
-python scripts/tsv_to_json.py
-```
-This writes `materials/cards.json`. The server will load JSON if present, otherwise it falls back to TSV.
-
-## Run
-
-```bash
 python app.py
 ```
-Then open `http://localhost:5000`.
+Open `http://localhost:5000`.
 
-- Health check: `http://localhost:5000/healthz`
-- Download rules: `http://localhost:5000/instructions`
+## Data
+- Preferred: `materials/cards.json`
+- Fallback: `materials/cards.tsv`
+- Rules: `materials/instructions.docx`
 
-## How it works
-- Backend: Flask + Flask-SocketIO (eventlet) serves a single shared game state in memory.
-- Data: `materials/cards.json` (preferred) or `materials/cards.tsv` is loaded at startup. The deck is shuffled; each Draw reveals the next card.
-- Frontend: `static/index.html` connects via Socket.IO and renders the drawn cards.
+## Render deployment
+1) Commit and push this folder to GitHub (repo root can be `labcards/` or the repo itself).
+2) On Render → New → Web Service → Connect your repo.
+3) Set:
+   - Environment: `Python 3`
+   - Build Command: `pip install -r labcards/requirements.txt` (or `requirements.txt` if repo root is `labcards/`)
+   - Start Command: `cd labcards && gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT app:app`
+4) Ensure `materials/` is in the repo (JSON/TSV and instructions).
+5) Deploy. The app should listen on the Render URL.
 
-## Deploy notes
-- For small groups (6–10), a single eventlet worker is fine. For more users, consider a message queue (Redis) + multiple workers.
-- Use a reverse proxy (nginx/Caddy) if exposing to the internet.
+Notes:
+- We use Gunicorn + eventlet for WebSocket support.
+- One worker (`-w 1`) is fine for small groups. Scale up with a Redis message queue if needed.
 
-## Customization
-- Card fields: `Category1`, `Category2`, `Name`, `Text`, `ShortText`, `URL` (optional).
-- Adjust styling/layout in `static/index.html`.
-
-## Safety
-- State is in-memory only. Restarting the server resets the deck.
+## Features
+- Draw exactly one random card from each suit in order: TOUCHSTONE → WORKSHOP → TOOL → PROTOCOL → PLATFORM.
+- Reset to start a fresh 5-card sequence.
