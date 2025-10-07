@@ -10,7 +10,8 @@ from flask_socketio import SocketIO, emit
 # App setup
 app = Flask(__name__, static_url_path='/static', static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret')
-socketio = SocketIO(app, cors_allowed_origins='*')
+# Use threading mode to avoid eventlet/greenlet dependencies
+socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*')
 
 # Data paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
