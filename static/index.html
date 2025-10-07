@@ -11,14 +11,17 @@
 			--text: #e5e7eb;
 			--muted: #9ca3af;
 			--accent: #38bdf8;
+			--accent2: #f97316;
 		}
 		body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
 		.container { max-width: 960px; margin: 0 auto; padding: 24px; }
 		h1 { font-size: 24px; margin: 0 0 12px; }
 		.controls { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
 		button { background: var(--accent); color: #03131a; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+		button.secondary { background: var(--accent2); color: #1a1003; }
 		button:disabled { opacity: 0.5; cursor: not-allowed; }
 		.status { color: var(--muted); font-size: 14px; margin-left: 8px; }
+		.redraws { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 		.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 		.card { background: var(--panel); border-radius: 10px; padding: 12px; border: 1px solid #1f2937; }
 		.card h3 { margin: 0 0 6px; font-size: 16px; }
@@ -36,6 +39,11 @@
 			<button id="resetBtn" disabled>Reset deck</button>
 			<div class="status" id="status">Connecting…</div>
 		</div>
+		<div class="redraws">
+			<button id="rdWorkshop" class="secondary" disabled>Redraw Workshop</button>
+			<button id="rdTool" class="secondary" disabled>Redraw Tool</button>
+			<button id="rdProtocol" class="secondary" disabled>Redraw Protocol</button>
+		</div>
 		<div class="cards" id="cards"></div>
 		<div class="footer">
 			<span>All players see the same draws in real time.</span>
@@ -49,6 +57,9 @@
 		const resetBtn = document.getElementById('resetBtn');
 		const statusEl = document.getElementById('status');
 		const cardsEl = document.getElementById('cards');
+		const rdWorkshop = document.getElementById('rdWorkshop');
+		const rdTool = document.getElementById('rdTool');
+		const rdProtocol = document.getElementById('rdProtocol');
 
 		function escapeHtml(str) {
 			return (str || '').replace(/[&<>\"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s]));
@@ -78,6 +89,11 @@
 				`;
 				cardsEl.appendChild(el);
 			}
+			// enable/disable redraws
+			const cr = (state.canRedraw || {});
+			rdWorkshop.disabled = !cr.WORKSHOP;
+			rdTool.disabled = !cr.TOOL;
+			rdProtocol.disabled = !cr.PROTOCOL;
 		}
 
 		const socket = io({ transports: ['websocket', 'polling'] });
@@ -85,8 +101,12 @@
 		socket.on('disconnect', () => { setConnected(false); });
 		socket.on('connect_error', () => { statusEl.textContent = 'Connection error'; });
 		socket.on('state', (state) => { render(state); });
+
 		drawBtn.addEventListener('click', () => socket.emit('draw'));
 		resetBtn.addEventListener('click', () => socket.emit('reset'));
+		rdWorkshop.addEventListener('click', () => socket.emit('redraw', { suit: 'WORKSHOP' }));
+		rdTool.addEventListener('click', () => socket.emit('redraw', { suit: 'TOOL' }));
+		rdProtocol.addEventListener('click', () => socket.emit('redraw', { suit: 'PROTOCOL' }));
 	</script>
 </body>
 </html>

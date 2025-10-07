@@ -27,9 +27,14 @@ all_cards: List[Dict[str, Any]] = []
 # Suit-based structures
 SUIT_ORDER = ["TOUCHSTONE", "WORKSHOP", "TOOL", "PROTOCOL", "PLATFORM"]
 SUIT_SET = set(SUIT_ORDER)
+ELIGIBLE_REDRAW = {"WORKSHOP", "TOOL", "PROTOCOL"}
 suit_to_indexes: Dict[str, List[int]] = {}
 # Drawn sequence (indexes of all_cards)
 drawn_indexes: List[int] = []
+# Mapping suit -> position in drawn_indexes where it was drawn
+suit_drawn_pos: Dict[str, int] = {}
+# One-time redraw usage per suit
+redraw_used: Dict[str, bool] = {"WORKSHOP": False, "TOOL": False, "PROTOCOL": False}
 # Pointer to next suit position in SUIT_ORDER
 current_step: int = 0
 _initialized: bool = False
@@ -64,7 +69,7 @@ def load_cards() -> List[Dict[str, Any]]:
 
 def build_suits() -> None:
 	"""Build and shuffle per-suit index lists and reset draw progression."""
-	global suit_to_indexes, drawn_indexes, current_step
+	global suit_to_indexes, drawn_indexes, current_step, suit_drawn_pos, redraw_used
 	suit_to_indexes = {suit: [] for suit in SUIT_ORDER}
 	for idx, card in enumerate(all_cards):
 		c1 = (card.get('Category1') or '').strip().upper()
@@ -76,6 +81,8 @@ def build_suits() -> None:
 	for lst in suit_to_indexes.values():
 		random.shuffle(lst)
 	drawn_indexes = []
+	suit_drawn_pos = {}
+	redraw_used = {"WORKSHOP": False, "TOOL": False, "PROTOCOL": False}
 	current_step = 0
 
 
@@ -94,11 +101,20 @@ def total_targets() -> int:
 	return sum(1 for s in SUIT_ORDER if suit_to_indexes.get(s))
 
 
+def can_redraw_map() -> Dict[str, bool]:
+	m: Dict[str, bool] = {}
+	for s in ELIGIBLE_REDRAW:
+		m[s] = bool(suit_drawn_pos.get(s) is not None and s in suit_drawn_pos and not redraw_used.get(s, False) and (suit_to_indexes.get(s) or []))
+	return m
+
+
 def current_state() -> Dict[str, Any]:
 	return {
 		'drawn': [all_cards[i] for i in drawn_indexes],
 		'remaining': remaining_total(),
 		'total': total_targets(),
+		'canRedraw': can_redraw_map(),
+		'redrawUsed': {k: bool(v) for k, v in redraw_used.items()},
 	}
 
 
@@ -162,9 +178,33 @@ def on_draw():
 		# Take the next randomized card from this suit
 		idx = bucket.pop()
 		drawn_indexes.append(idx)
+		suit_drawn_pos[current_suit] = len(drawn_indexes) - 1
 		# Move to next suit position for the next draw
 		current_step += 1
 	# Broadcast updated state
+	socketio.emit('state', current_state())
+
+
+@socketio.on('redraw')
+def on_redraw(payload):
+	ensure_bootstrap()
+	if not isinstance(payload, dict):
+		return
+	suit = (payload.get('suit') or '').strip().upper()
+	if suit not in ELIGIBLE_REDRAW:
+		return
+	if redraw_used.get(suit):
+		return
+	pos = suit_drawn_pos.get(suit)
+	if pos is None:
+		return
+	bucket = suit_to_indexes.get(suit) or []
+	if not bucket:
+		return
+	# Replace the drawn card with a different one from the same suit
+	new_idx = bucket.pop()
+	drawn_indexes[pos] = new_idx
+	redraw_used[suit] = True
 	socketio.emit('state', current_state())
 
 
